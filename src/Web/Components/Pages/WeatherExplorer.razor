@@ -1,0 +1,153 @@
+@page "/"
+@page "/weather"
+@rendermode InteractiveServer
+@using Web.Services
+@inject WeatherApiClient Api
+
+<PageTitle>Xtramile Weather Explorer</PageTitle>
+
+<h1>Xtramile Weather Explorer</h1>
+
+@if (loadError is not null)
+{
+    <div class="alert alert-danger">@loadError</div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <label class="form-label">Country</label>
+        <select class="form-select" @onchange="OnCountryChanged" disabled="@(countries is null)">
+            <option value="">-- Select country --</option>
+            @if (countries is not null)
+            {
+                @foreach (var c in countries)
+                {
+                    <option value="@c.Code" selected="@(c.Code == selectedCountry)">@c.Name (@c.Code)</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">City</label>
+        <select class="form-select" @onchange="OnCityChanged" disabled="@(cities is null || cities.Count == 0)">
+            <option value="">-- Select city --</option>
+            @if (cities is not null)
+            {
+                @foreach (var c in cities)
+                {
+                    <option value="@c.Name" selected="@(c.Name == selectedCity)">@c.Name</option>
+                }
+            }
+        </select>
+    </div>
+</div>
+
+@if (loadingWeather)
+{
+    <p><em>Loading weather…</em></p>
+}
+else if (weatherError is not null)
+{
+    <div class="alert alert-warning">@weatherError</div>
+}
+else if (weather is not null)
+{
+    <div class="card mb-4">
+        <div class="card-header"><strong>@weather.Location.City, @weather.Location.Country</strong> — @weather.Sky (@weather.Description)</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Time (UTC):</strong> @weather.TimeUtc.ToString("u")</p>
+                    <p><strong>Temperature:</strong> @weather.Temperature.Fahrenheit °F / @weather.Temperature.Celsius °C</p>
+                    <p><strong>Dew Point:</strong> @weather.DewPoint.Fahrenheit °F / @weather.DewPoint.Celsius °C</p>
+                    <p><strong>Humidity:</strong> @weather.Humidity %</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Wind:</strong> @weather.Wind.Speed m/s, @weather.Wind.Direction°</p>
+                    <p><strong>Visibility:</strong> @weather.Visibility m</p>
+                    <p><strong>Pressure:</strong> @weather.Pressure hPa</p>
+                    <p><strong>Sky:</strong> @weather.Sky</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Save weather note</div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Note</label>
+                <textarea class="form-control" rows="3" @bind="noteText" maxlength="500" placeholder="e.g. Perfect for beach"></textarea>
+            </div>
+            <button class="btn btn-primary" @onclick="OnSaveNote" disabled="@savingNote">@(savingNote ? "Saving…" : "Save Note")</button>
+            @if (noteFeedback is not null)
+            {
+                <div class="alert @(noteSuccess ? "alert-success" : "alert-danger") mt-3">@noteFeedback</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    List<CountryDto>? countries;
+    List<CityDto>? cities;
+    string? selectedCountry;
+    string? selectedCity;
+    WeatherDto? weather;
+    bool loadingWeather;
+    string? loadError;
+    string? weatherError;
+    string noteText = "";
+    bool savingNote;
+    string? noteFeedback;
+    bool noteSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { countries = await Api.GetCountriesAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    async Task OnCountryChanged(ChangeEventArgs e)
+    {
+        selectedCountry = e.Value?.ToString();
+        selectedCity = null; weather = null; weatherError = null; cities = null;
+        if (string.IsNullOrWhiteSpace(selectedCountry)) return;
+        try { cities = await Api.GetCitiesAsync(selectedCountry); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    async Task OnCityChanged(ChangeEventArgs e)
+    {
+        selectedCity = e.Value?.ToString();
+        weather = null; weatherError = null; noteFeedback = null;
+        if (string.IsNullOrWhiteSpace(selectedCity)) return;
+        loadingWeather = true;
+        try
+        {
+            weather = await Api.GetWeatherAsync(selectedCity);
+            if (weather is null) weatherError = $"Weather for '{selectedCity}' not found.";
+        }
+        catch (Exception ex) { weatherError = ex.Message; }
+        finally { loadingWeather = false; }
+    }
+
+    async Task OnSaveNote()
+    {
+        if (weather is null || string.IsNullOrWhiteSpace(selectedCity) || string.IsNullOrWhiteSpace(selectedCountry))
+        {
+            noteFeedback = "Select a city and weather first."; noteSuccess = false; return;
+        }
+        if (string.IsNullOrWhiteSpace(noteText)) { noteFeedback = "Note is required."; noteSuccess = false; return; }
+        savingNote = true; noteFeedback = null;
+        try
+        {
+            var (ok, err, id) = await Api.CreateNoteAsync(selectedCity, selectedCountry, noteText, weather.Temperature.Fahrenheit);
+            noteSuccess = ok;
+            noteFeedback = ok ? $"Note saved (id={id})." : $"Failed: {err}";
+            if (ok) noteText = "";
+        }
+        catch (Exception ex) { noteSuccess = false; noteFeedback = ex.Message; }
+        finally { savingNote = false; }
+    }
+}

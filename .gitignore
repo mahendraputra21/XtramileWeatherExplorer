@@ -1,0 +1,44 @@
+# Build
+bin/
+obj/
+out/
+publish/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+.vscode/settings.json
+
+# Test results / coverage
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+*.trx
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/*
+
+# Logs / temp
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local secrets (keep appsettings.json — placeholder only)
+secrets.json
+appsettings.Production.json
+appsettings.Local.json
+
+# UserSecrets is outside repo — no file to ignore, listed for clarity
+# %APPDATA%/Microsoft/UserSecrets/<UserSecretsId>/secrets.json
